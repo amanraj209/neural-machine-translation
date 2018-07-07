@@ -91,7 +91,7 @@ def single_worker_inference(infer_model, ckpt, inference_input_file, inference_o
                                           num_translations_per_input=hparams.num_translations_per_input)
 
 
-def single_worker_inference(infer_model, ckpt, inference_input_file, inference_output_file, 
+def multi_worker_inference(infer_model, ckpt, inference_input_file, inference_output_file, 
                             hparams, num_workers, job_id):
     assert num_workers > 1
 
