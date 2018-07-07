@@ -139,9 +139,9 @@ def create_infer_model(model_creator, hparams, scope=None, extra_args=None):
                                                      eos=hparams.eos,
                                                      src_max_len=hparams.src_max_len_infer)
         model = model_creator(hparams, iterator=iterator, mode=tf.contrib.learn.ModeKeys.INFER,
-                                  source_vocab_table=src_vocab_table, target_vocab_table=tgt_vocab_table,
-                                  reverse_target_vocab_table=reverse_tgt_vocab_table,
-                                  scope=scope, extra_args=extra_args)
+                              source_vocab_table=src_vocab_table, target_vocab_table=tgt_vocab_table,
+                              reverse_target_vocab_table=reverse_tgt_vocab_table,
+                              scope=scope, extra_args=extra_args)
     
     return InferModel(graph=graph, model=model, 
                      src_placeholder=src_placeholder, 
