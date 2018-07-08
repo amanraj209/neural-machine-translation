@@ -4,8 +4,8 @@ import time
 import codecs
 import tensorflow as tf
 
-from . import attention_model, model_util, model as nmt_model
-from .utils import nmt_utils, misc_utils as utils
+import attention_model, model_util, model as nmt_model
+from utils import nmt_utils, misc_utils as utils
 
 __all__ = ["load_data", "inference", "single_worker_inference", "multi_worker_instance"]
 

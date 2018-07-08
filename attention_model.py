@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import tensorflow as tf
-from . import model, model_util
+import model, model_util
 
 __all__ = ["AttentionModel"]
 
@@ -67,7 +67,7 @@ class AttentionModel(model.Model):
                                                    output_attention=hparams.output_attention,
                                                    name="attention")
         
-        cell - tf.contrib.rnn.DeviceWrapperCell(cell, model_util.get_device_str(num_layers - 1, self.num_gpus))
+        cell = tf.contrib.rnn.DeviceWrapper(cell, model_util.get_device_str(num_layers - 1, self.num_gpus))
 
         if hparams.pass_hidden_state:
             decoder_initial_state = cell.zero_state(batch_size, dtype).clone(cell_state=encoder_state)

@@ -5,7 +5,7 @@ import codecs
 import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
-from ..utils import misc_utils as utils
+from utils import misc_utils as utils
 
 UNK = "<unk>"
 SOS = "<s>"

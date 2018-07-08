@@ -4,7 +4,7 @@ import codecs
 import subprocess
 import tensorflow as tf
 
-from ..scripts import bleu, rouge
+from scripts import bleu, rouge
 
 __all__ = ["evaluate"]
 

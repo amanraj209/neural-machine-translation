@@ -4,9 +4,9 @@ import abc
 import tensorflow as tf
 from tensorflow.python.layers import core as layers_core
 
-from . import model_util
-from .utils import iterator_utils
-from .utils import misc_utils as utils
+import model_util
+from utils import iterator_utils
+from utils import misc_utils as utils
 
 utils.check_tensorflow_version()
 
@@ -306,7 +306,7 @@ class BaseModel(object):
             target_output = tf.transpose(target_output)
         max_time = self.get_max_time(target_output)
         cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=target_output, logits=logits)
-        target_weights = tf.sequence_mask((self.iterator.target_sequence_length, max_time, dtype=logits.dtype))
+        target_weights = tf.sequence_mask(self.iterator.target_sequence_length, max_time, dtype=logits.dtype)
         if self.time_major:
             target_weights = tf.transpose(target_weights)
         
@@ -342,13 +342,13 @@ class Model(BaseModel):
 
         source = iterator.source
         if self.time_major:
-            source = tf.tranpose(source)
+            source = tf.transpose(source)
         
         with tf.variable_scope("encoder") as encoder_scope:
             dtype = encoder_scope.dtype
             encoder_emb_input = tf.nn.embedding_lookup(self.embedding_encoder, source)
 
-            if hparams.encoder_type = "uni":
+            if hparams.encoder_type == "uni":
                 utils.print_out("num_layers = %d, num_residual_layers=%d" % (num_layers, num_residual_layers))
 
                 cell = self._build_encoder_cell(hparams, num_layers, num_residual_layers)
@@ -371,8 +371,8 @@ class Model(BaseModel):
                     encoder_state = bi_encoder_state
                 else:
                      # alternatively concat forward and backward states
-                     encoder_state = []
-                     for layer in range(num_bi_layers):
+                    encoder_state = []
+                    for layer in range(num_bi_layers):
                          encoder_state.append(bi_encoder_state[0][layer]) # forward
                          encoder_state.append(bi_encoder_state[1][layer]) # backward
                     encoder_state = tuple(encoder_state)
@@ -399,7 +399,7 @@ class Model(BaseModel):
         
         cell = model_util.create_rnn_cell(unit_type=hparams.unit_type, num_units=hparams.num_units, num_layers=self.num_decoder_layers,
                                           num_residual_layers=self.num_decoder_residual_layers, forget_bias=hparams.forget_bias,
-                                          dropout=hparams.dropout, num_gpus=self.num_gpus, mode=self.mode
+                                          dropout=hparams.dropout, num_gpus=self.num_gpus, mode=self.mode,
                                           single_cell_fn=self.single_cell_fn)
         
         # For beam search, we need to replicate encoder infos beam_width times

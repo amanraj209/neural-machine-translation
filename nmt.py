@@ -7,8 +7,8 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-from . import inference, train
-from .utils import evaluation_utils, vocab_utils, misc_utils as utils
+import inference, train
+from utils import evaluation_utils, vocab_utils, misc_utils as utils
 
 utils.check_tensorflow_version()
 
@@ -17,12 +17,12 @@ def create_hparams():
     return tf.contrib.training.HParams(
         src="vi",
         tgt="en",
-        train_prefix="/tmp/data/train",
-        dev_prefix="/tmp/data/tst2012",
-        test_prefix="/tmp/data/tst2013",
-        vocab_prefix="/tmp/data/vocab",
+        train_prefix="./data/train",
+        dev_prefix="./data/tst2012",
+        test_prefix="./data/tst2013",
+        vocab_prefix="./data/vocab",
         embed_prefix=None,
-        out_dir="/tmp/nmt_model",
+        out_dir="./nmt_model",
 
         num_units=128,
         num_layers=2,
@@ -229,7 +229,7 @@ def run_main(default_hparams, train_fn, inference_fn, target_session=""):
         random.seed(random_seed + job_id)
         np.random.seed(random_seed + job_id)
 
-    out_dir = "/tmp/nmt_model"
+    out_dir = "./nmt_model"
     if not tf.gfile.Exists(out_dir): tf.gfile.MakeDirs(out_dir)
 
     hparams = create_or_load_hparams(out_dir, default_hparams, default_hparams.hparams_path, save_hparams=(job_id == 0))
@@ -254,7 +254,7 @@ def run_main(default_hparams, train_fn, inference_fn, target_session=""):
         train_fn(hparams, target_session=target_session)
 
 
-def main():
+def main(unused_argv):
     default_hparams = create_hparams()
     train_fn = train.train
     inference_fn = inference.inference

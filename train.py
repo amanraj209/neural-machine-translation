@@ -6,8 +6,8 @@ import math
 import random
 import tensorflow as tf
 
-from . import attention_model, model_util, inference, model as nmt_model
-from .utils import nmt_utils, misc_utils as utils
+import attention_model, model_util, inference, model as nmt_model
+from utils import nmt_utils, misc_utils as utils
 
 utils.check_tensorflow_version()
 
@@ -276,7 +276,7 @@ def before_train(loaded_train_model, train_model, train_sess, global_step, hpara
     skip_count = hparams.batch_size * hparams.epoch_step
     utils.print_out("Init train iterator, skipping %d elements" % skip_count)
     train_sess.run(train_model.iterator.initializer, feed_dict={train_model.skip_count_placeholder: skip_count})
-    return stats, inference, start_train_time
+    return stats, info, start_train_time
 
 
 # Summary of the current best results

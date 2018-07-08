@@ -61,7 +61,7 @@ def create_standard_hparams():
 
         # Misc
         forget_bias=1.0,
-        num_gpus=2,
+        num_gpus=0,
         epoch_step=0,
         steps_per_stats=100,
         steps_per_external_eval=0,
