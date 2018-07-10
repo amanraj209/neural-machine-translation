@@ -107,3 +107,4 @@ venv.bak/
 data/
 nmt_model/
 .DS_Store
+.vscode/

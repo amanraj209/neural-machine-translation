@@ -264,10 +264,10 @@ def create_rnn_cell(unit_type, num_units, num_layers, num_residual_layers, forge
                            forget_bias=forget_bias, dropout=dropout, mode=mode, num_gpus=num_gpus, base_gpu=base_gpu,
                            single_cell_fn=single_cell_fn)
 
-  if len(cell_list) == 1:  # Single layer.
-    return cell_list[0]
-  else:  # Multi layers
-    return tf.contrib.rnn.MultiRNNCell(cell_list)
+    if len(cell_list) == 1:  # Single layer.
+        return cell_list[0]
+    else:  # Multi layers
+        return tf.contrib.rnn.MultiRNNCell(cell_list)
 
 
 def gradient_clip(gradients, max_gradient_norm):
