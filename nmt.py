@@ -71,7 +71,7 @@ def create_hparams():
         check_special_token=True,
 
         forget_bias=1.0,
-        num_gpus=0,
+        num_gpus=2,
         epoch_step=0,
         steps_per_stats=100,
         steps_per_external_eval=0,
@@ -81,7 +81,7 @@ def create_hparams():
         random_seed=None,
         override_loaded_hparams=True,
         num_keep_ckpts=5,
-        avg_ckpts=False,
+        avg_ckpts=True,
         num_intra_threads=0,
         num_inter_threads=0,
 

@@ -12,6 +12,7 @@ SOS = "<s>"
 EOS = "</s>"
 UNK_ID = 0
 
+
 def load_vocab(vocab_file):
     vocab = []
     with codecs.getreader("utf-8")(tf.gfile.GFile(vocab_file, "rb")) as f:
@@ -24,12 +25,15 @@ def load_vocab(vocab_file):
 
 def check_vocab(vocab_file, out_dir, check_special_token=True, sos=None, eos=None, unk=None):
     if tf.gfile.Exists(vocab_file):
+        utils.print_out("# Vocab file %s exists" % vocab_file)
         vocab, vocab_size = load_vocab(vocab_file)
         if check_special_token:
             if not unk: unk = UNK
             if not sos: sos = SOS
             if not eos: eos = EOS
+            assert len(vocab) >= 3
             if vocab[0] != unk or vocab[1] != sos or vocab[2] != eos:
+                utils.print_out("The first 3 vocab words [%s, %s, %s] are not [%s, %s, %s]" % (vocab[0], vocab[1], vocab[2], unk, sos, eos))
                 vocab = [unk, sos, eos] + vocab
                 vocab_size += 3
                 new_vocab_file = os.path.join(out_dir, os.path.basename(vocab_file))
@@ -38,7 +42,8 @@ def check_vocab(vocab_file, out_dir, check_special_token=True, sos=None, eos=Non
                         f.write("%s\n" % word)
                 vocab_file = new_vocab_file
     else:
-        raise ValueError("Vocab file %s does not exists." % vocab_file)
+        raise ValueError("vocab_file '%s' does not exist." % vocab_file)
+
     vocab_size = len(vocab)
     return vocab_size, vocab_file
 
@@ -55,14 +60,14 @@ def create_vocab_tables(src_vocab_file, tgt_vocab_file, share_vocab):
 def load_embed_txt(embed_file):
     emb_dict = dict()
     emb_size = None
-    with codecs.getreader("utf-8")(tf.gfile.GFile(embed_file, "rb")) as f:
+    with codecs.getreader("utf-8")(tf.gfile.GFile(embed_file, 'rb')) as f:
         for line in f:
             tokens = line.strip().split(" ")
             word = tokens[0]
             vec = list(map(float, tokens[1:]))
             emb_dict[word] = vec
             if emb_size:
-                assert emb_size == len(vec)
+                assert emb_size == len(vec), "All embedding size should be same."
             else:
                 emb_size = len(vec)
     return emb_dict, emb_size

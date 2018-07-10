@@ -20,7 +20,8 @@ def evaluate(ref_file, trans_file, metric, subword_option=None):
     elif metric.lower() == "word_accuracy":
         evaluation_score = _word_accuracy(ref_file, trans_file)
     else:
-        raise ValueError("Unknown metric: %s" % metric)
+        raise ValueError("Unknown metric %s" % metric)
+
     return evaluation_score
 
 
@@ -28,7 +29,7 @@ def _clean(sentence, subword_option):
     sentence = sentence.strip()
     # BPE (Byte Pair Encoding)
     if subword_option == "bpe":
-        sentence = re.sub("@@", "", sentence)
+        sentence = re.sub("@@ ", "", sentence)
     # SPM
     elif subword_option == "spm":
         sentence = u"".join(sentence.split()).replace(u"\u2581", u" ").lstrip()
@@ -45,7 +46,7 @@ def _bleu(ref_file, trans_file, subword_option=None):
     for reference_filename in ref_files:
         with codecs.getreader("utf-8")(tf.gfile.GFile(reference_filename, "rb")) as f:
             reference_text.append(f.readlines())
-    
+
     per_segment_references = []
     for references in zip(*reference_text):
         reference_list = []
@@ -53,15 +54,15 @@ def _bleu(ref_file, trans_file, subword_option=None):
             reference = _clean(reference, subword_option)
             reference_list.append(reference.split(" "))
         per_segment_references.append(reference_list)
-    
+
     translations = []
     with codecs.getreader("utf-8")(tf.gfile.GFile(trans_file, "rb")) as f:
         for line in f:
-            line = _clean(line, subword_option)
+            line = _clean(line, subword_option=None)
             translations.append(line.split(" "))
-    
+
     bleu_score, _, _, _, _, _ = bleu.compute_bleu(per_segment_references, translations, max_order, smooth)
-    return bleu_score * 100
+    return 100 * bleu_score
 
 
 # ROUGE scores for summarization tasks
@@ -69,17 +70,15 @@ def _rouge(ref_file, summarization_file, subword_option=None):
     references = []
     with codecs.getreader("utf-8")(tf.gfile.GFile(ref_file, "rb")) as f:
         for line in f:
-            line = _clean(line, subword_option)
-            references.append(line)
+            references.append(_clean(line, subword_option))
 
     hypotheses = []
     with codecs.getreader("utf-8")(tf.gfile.GFile(summarization_file, "rb")) as f:
         for line in f:
-            line = _clean(line, subword_option)
-            hypotheses.append(line)
-    
+            hypotheses.append(_clean(line, subword_option=None))
+
     rouge_score_map = rouge.rouge(hypotheses, references)
-    return rouge_score_map["rouge_l/f_score"] * 100
+    return 100 * rouge_score_map["rouge_l/f_score"]
 
 
 def _accuracy(label_file, pred_file):
@@ -93,12 +92,12 @@ def _accuracy(label_file, pred_file):
                 if label == pred:
                     match += 1
                 count += 1
-    return match / count * 100
+    return 100 * match / count
 
 
 def _word_accuracy(label_file, pred_file):
-    with codecs.getreader("utf-8")(tf.gfile.GFile(label_file, "rb")) as label_f:
-        with codecs.getreader("utf-8")(tf.gfile.GFile(pred_file, "rb")) as pred_f:
+    with codecs.getreader("utf-8")(tf.gfile.GFile(label_file, "r")) as label_f:
+        with codecs.getreader("utf-8")(tf.gfile.GFile(pred_file, "r")) as pred_f:
             total_acc, total_count = 0., 0.
             for sentence in label_f:
                 labels = sentence.strip().split(" ")
@@ -109,6 +108,6 @@ def _word_accuracy(label_file, pred_file):
                     pred = preds[pos]
                     if label == pred:
                         match += 1
-                total_acc += match / max(len(labels), len(preds)) * 100
+                total_acc += 100 * match / max(len(labels), len(preds))
                 total_count += 1
     return total_acc / total_count

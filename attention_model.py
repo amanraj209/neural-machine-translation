@@ -15,12 +15,10 @@ class AttentionModel(model.Model):
         else:
             self.attention_mechanism_fn = create_attention_mechanism
 
-        super(AttentionModel, self).__init__(hparams=hparams, iterator=iterator, mode=mode,
-                                             source_vocab_table=source_vocab_table,
-                                             target_vocab_table=target_vocab_table,
-                                             reverse_target_vocab_table=reverse_target_vocab_table,
+        super(AttentionModel, self).__init__(hparams=hparams, iterator=iterator, mode=mode, source_vocab_table=source_vocab_table,
+                                             target_vocab_table=target_vocab_table, reverse_target_vocab_table=reverse_target_vocab_table,
                                              scope=scope, extra_args=extra_args)
-        
+
         if self.mode == tf.contrib.learn.ModeKeys.INFER:
             self.infer_summary = self._get_infer_summary(hparams)
     
@@ -31,18 +29,19 @@ class AttentionModel(model.Model):
 
         if attention_architecture != "standard":
             raise ValueError("Unknown attention architecture %s" % attention_architecture)
-        
+
         num_units = hparams.num_units
         num_layers = self.num_decoder_layers
         num_residual_layers = self.num_decoder_residual_layers
         beam_width = hparams.beam_width
+
         dtype = tf.float32
 
         if self.time_major:
             memory = tf.transpose(encoder_outputs, [1, 0, 2])
         else:
             memory = encoder_outputs
-        
+
         if self.mode == tf.contrib.learn.ModeKeys.INFER and beam_width > 0:
             memory = tf.contrib.seq2seq.tile_batch(memory, multiplier=beam_width)
             source_sequence_length = tf.contrib.seq2seq.tile_batch(source_sequence_length, multiplier=beam_width)
@@ -50,30 +49,27 @@ class AttentionModel(model.Model):
             batch_size = self.batch_size * beam_width
         else:
             batch_size = self.batch_size
-        
-        attention_mechanism = self.attention_mechanism_fn(attention_option, num_units, memory,
-                                                          source_sequence_length, self.mode)
-        
-        cell = model_util.create_rnn_cell(unit_type=hparams.unit_type, num_units=num_units, num_layers=num_layers,
-                                          num_residual_layers=num_residual_layers, forget_bias=hparams.forget_bias,
-                                          dropout=hparams.dropout, num_gpus=self.num_gpus, mode=self.mode,
-                                          single_cell_fn=self.single_cell_fn)
-        
-        # Only generate alignment in greedy INFER mode
-        alignment_history = self.mode == tf.contrib.learn.ModeKeys.INFER and beam_width == 0
 
+        attention_mechanism = self.attention_mechanism_fn(attention_option, num_units, memory, source_sequence_length, self.mode)
+
+        cell = model_util.create_rnn_cell(unit_type=hparams.unit_type, num_units=num_units, num_layers=num_layers,
+                                            num_residual_layers=num_residual_layers, forget_bias=hparams.forget_bias,
+                                            dropout=hparams.dropout, num_gpus=self.num_gpus, mode=self.mode,
+                                            single_cell_fn=self.single_cell_fn)
+
+        # Only generate alignment in greedy INFER mode
+        alignment_history = (self.mode == tf.contrib.learn.ModeKeys.INFER and beam_width == 0)
         cell = tf.contrib.seq2seq.AttentionWrapper(cell, attention_mechanism, attention_layer_size=num_units,
-                                                   alignment_history=alignment_history,
-                                                   output_attention=hparams.output_attention,
+                                                   alignment_history=alignment_history, output_attention=hparams.output_attention,
                                                    name="attention")
-        
+
         cell = tf.contrib.rnn.DeviceWrapper(cell, model_util.get_device_str(num_layers - 1, self.num_gpus))
 
         if hparams.pass_hidden_state:
             decoder_initial_state = cell.zero_state(batch_size, dtype).clone(cell_state=encoder_state)
         else:
             decoder_initial_state = cell.zero_state(batch_size, dtype)
-        
+
         return cell, decoder_initial_state
 
 
@@ -86,27 +82,22 @@ class AttentionModel(model.Model):
 def create_attention_mechanism(attention_option, num_units, memory, source_sequence_length, mode):
     del mode
     if attention_option == "luong":
-        attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units, memory,
-                                                                memory_sequence_length=source_sequence_length)
+        attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units, memory, memory_sequence_length=source_sequence_length)
     elif attention_option == "scaled_luong":
-        attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units, memory,
-                                                                memory_sequence_length=source_sequence_length,
-                                                                scale=True)
+        attention_mechanism = tf.contrib.seq2seq.LuongAttention(num_units, memory, memory_sequence_length=source_sequence_length, scale=True)
     elif attention_option == "bahdanau":
-        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units, memory,
-                                                                   memory_sequence_length=source_sequence_length)
+        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units, memory, memory_sequence_length=source_sequence_length)
     elif attention_option == "normed_bahdanau":
-        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units, memory,
-                                                                   memory_sequence_length=source_sequence_length,
-                                                                   normalize=True)
+        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units, memory, memory_sequence_length=source_sequence_length, normalize=True)
     else:
         raise ValueError("Unknown attention option %s" % attention_option)
+
     return attention_mechanism
 
 
 def _create_attention_images_summary(final_context_state):
-    attention_images = final_context_state.alignment_history.stack()
-    # Reshape to (batch, src_seq_len, tgt_seq_len, 1)
+    attention_images = (final_context_state.alignment_history.stack())
+     # Reshape to (batch, src_seq_len, tgt_seq_len,1)
     attention_images = tf.expand_dims(tf.transpose(attention_images, [1, 2, 0]), -1)
     # Scale to range [0, 255]
     attention_images *= 255

@@ -46,7 +46,7 @@ class TrainModel(collections.namedtuple("TrainModel", ("graph", "model", "iterat
   pass
 
 
-def create_train_model(model_creator, hparams, scope=None, num_workers=1, jobid=0, extra_args=None):
+def create_train_model(model_creator, hparams, scope=None, num_workers=1, job_id=0, extra_args=None):
     src_file = "%s.%s" % (hparams.train_prefix, hparams.src)
     tgt_file = "%s.%s" % (hparams.train_prefix, hparams.tgt)
     src_vocab_file = hparams.src_vocab_file
@@ -64,7 +64,7 @@ def create_train_model(model_creator, hparams, scope=None, num_workers=1, jobid=
         iterator = iterator_utils.get_iterator(src_dataset, tgt_dataset, src_vocab_table, tgt_vocab_table, batch_size=hparams.batch_size,
                                                sos=hparams.sos, eos=hparams.eos, random_seed=hparams.random_seed, num_buckets=hparams.num_buckets,
                                                src_max_len=hparams.src_max_len, tgt_max_len=hparams.tgt_max_len, skip_count=skip_count_placeholder,
-                                               num_shards=num_workers,shard_index=jobid)
+                                               num_shards=num_workers,shard_index=job_id)
 
         model_device_fn = None
         if extra_args: model_device_fn = extra_args.model_device_fn
@@ -204,112 +204,119 @@ def create_emb_for_encoder_and_decoder(share_vocab, src_vocab_size, tgt_vocab_si
     return embedding_encoder, embedding_decoder
 
 
-def _single_cell(unit_type, num_units, forget_bias, dropout, mode, residual_connection=False,
-                 device_str=None, residual_fn=None):
+def _single_cell(unit_type, num_units, forget_bias, dropout, mode, residual_connection=False, device_str=None, residual_fn=None):
     dropout = dropout if mode == tf.contrib.learn.ModeKeys.TRAIN else 0.0
 
     if unit_type == "lstm":
-        utils.print_out(" LSTM, forget_bias=%g" % forget_bias, new_line=False)
+        utils.print_out("  LSTM, forget_bias=%g" % forget_bias, new_line=False)
         single_cell = tf.contrib.rnn.BasicLSTMCell(num_units, forget_bias=forget_bias)
     elif unit_type == "gru":
-        utils.print_out(" GRU", new_line=False)
+        utils.print_out("  GRU", new_line=False)
         single_cell = tf.contrib.rnn.GRUCell(num_units)
     elif unit_type == "layer_norm_lstm":
-        utils.print_out(" Layer normalized LSTM, forget_bias=%g" % forget_bias, new_line=False)
+        utils.print_out("  Layer Normalized LSTM, forget_bias=%g" % forget_bias, new_line=False)
         single_cell = tf.contrib.rnn.LayerNormBasicLSTMCell(num_units, forget_bias=forget_bias, layer_norm=True)
     elif unit_type == "nas":
-        utils.print_out(" NASCell", new_line=False)
+        utils.print_out("  NASCell", new_line=False)
         single_cell = tf.contrib.rnn.NASCell(num_units)
     else:
-        raise ValueError("Unknown unit type %s" % unit_type)
-    
-    # dropout = 1 - keep_prob
+        raise ValueError("Unknown unit type %s!" % unit_type)
+
+    # Dropout (= 1 - keep_prob)
     if dropout > 0.0:
         single_cell = tf.contrib.rnn.DropoutWrapper(cell=single_cell, input_keep_prob=(1.0 - dropout))
-        utils.print_out(" %s, dropout=%g " %(type(single_cell).__name__, dropout), new_line=False)
-    
+        utils.print_out("  %s, dropout=%g " %(type(single_cell).__name__, dropout), new_line=False)
+
+    # Residual
     if residual_connection:
         single_cell = tf.contrib.rnn.ResidualWrapper(single_cell, residual_fn=residual_fn)
-        utils.print_out(" %s" % type(single_cell).__name__, new_line=False)
-    
+        utils.print_out("  %s" % type(single_cell).__name__, new_line=False)
+
+    # Device Wrapper
     if device_str:
         single_cell = tf.contrib.rnn.DeviceWrapper(single_cell, device_str)
-        utils.print_out(" %s, device=%s" % (type(single_cell).__name__, device_str), new_line=False)
-    
+        utils.print_out("  %s, device=%s" % (type(single_cell).__name__, device_str), new_line=False)
+
     return single_cell
 
 
-def _cell_list(unit_type, num_units, num_layers, num_residual_layers, forget_bias, dropout, mode,
-               num_gpus, base_gpu=0, single_cell_fn=None, residual_fn=None):
-    if not single_cell_fn:
-        single_cell_fn = _single_cell
-    
-    # Multi-GPU
-    cell_list = []
-    for i in range(num_layers):
-        utils.print_out(" cell %d" % i, new_line=False)
-        single_cell = single_cell_fn(unit_type=unit_type, num_units=num_units, forget_bias=forget_bias,
-                                     dropout=dropout, mode=mode, residual_connection=(i >= num_layers - num_residual_layers),
-                                     device_str=get_device_str(i + base_gpu, num_gpus), residual_fn=residual_fn)
-        utils.print_out("")
-        cell_list.append(single_cell)
-    return cell_list
+def _cell_list(unit_type, num_units, num_layers, num_residual_layers, forget_bias, dropout, 
+               mode, num_gpus, base_gpu=0, single_cell_fn=None, residual_fn=None):
+  if not single_cell_fn:
+    single_cell_fn = _single_cell
+
+  # Multi-GPU
+  cell_list = []
+  for i in range(num_layers):
+    utils.print_out("  cell %d" % i, new_line=False)
+    single_cell = single_cell_fn(unit_type=unit_type, num_units=num_units, forget_bias=forget_bias, dropout=dropout,
+                                 mode=mode, residual_connection=(i >= num_layers - num_residual_layers),
+                                 device_str=get_device_str(i + base_gpu, num_gpus), residual_fn=residual_fn)
+    utils.print_out("")
+    cell_list.append(single_cell)
+
+  return cell_list
 
 
-def create_rnn_cell(unit_type, num_units, num_layers, num_residual_layers, forget_bias, dropout, mode,
-                    num_gpus, base_gpu=0, single_cell_fn=None):
-    cell_list = _cell_list(unit_type=unit_type, num_units=num_units, num_layers=num_layers, 
-                           num_residual_layers=num_residual_layers, forget_bias=forget_bias, dropout=dropout,
-                           mode=mode, num_gpus=num_gpus, base_gpu=base_gpu, single_cell_fn=single_cell_fn)
-    if len(cell_list) == 1: # Single layer
-        return cell_list[0]
-    else: # Multiple layers
-        return tf.contrib.rnn.MultiRNNCell(cell_list)
+def create_rnn_cell(unit_type, num_units, num_layers, num_residual_layers, forget_bias, dropout, 
+                    mode, num_gpus, base_gpu=0, single_cell_fn=None):
+    cell_list = _cell_list(unit_type=unit_type, num_units=num_units, num_layers=num_layers, num_residual_layers=num_residual_layers,
+                           forget_bias=forget_bias, dropout=dropout, mode=mode, num_gpus=num_gpus, base_gpu=base_gpu,
+                           single_cell_fn=single_cell_fn)
+
+  if len(cell_list) == 1:  # Single layer.
+    return cell_list[0]
+  else:  # Multi layers
+    return tf.contrib.rnn.MultiRNNCell(cell_list)
 
 
 def gradient_clip(gradients, max_gradient_norm):
     clipped_gradients, gradient_norm = tf.clip_by_global_norm(gradients, max_gradient_norm)
     gradient_norm_summary = [tf.summary.scalar("grad_norm", gradient_norm)]
     gradient_norm_summary.append(tf.summary.scalar("clipped_gradient", tf.global_norm(clipped_gradients)))
+
     return clipped_gradients, gradient_norm_summary, gradient_norm
 
 
 def avg_checkpoints(model_dir, num_last_checkpoints, global_step, global_step_name):
     checkpoint_state = tf.train.get_checkpoint_state(model_dir)
     if not checkpoint_state:
-        utils.print_out("No checkpoint file found in directory: %s" % model_dir)
+        utils.print_out("# No checkpoint file found in directory: %s" % model_dir)
         return None
-    
-    checkpoints = checkpoint_state.all_model_checkpoint_paths[-num_last_checkpoints:]
+
+    checkpoints = (checkpoint_state.all_model_checkpoint_paths[-num_last_checkpoints:])
+
     if len(checkpoints) < num_last_checkpoints:
-        utils.print_out("Skipping averaging checkpoints because not enough checkpoints are available")
+        utils.print_out("# Skipping averaging checkpoints because not enough checkpoints is avaliable.")
         return None
-    
+
     avg_model_dir = os.path.join(model_dir, "avg_checkpoints")
     if not tf.gfile.Exists(avg_model_dir):
-        utils.print_out("Creating new directory %s for saving averaged checkpoints." % avg_model_dir)
+        utils.print_out("# Creating new directory %s for saving averaged checkpoints." % avg_model_dir)
         tf.gfile.MakeDirs(avg_model_dir)
-    
+
     utils.print_out("# Reading and averaging variables in checkpoints:")
     var_list = tf.contrib.framework.list_variables(checkpoints[0])
     var_values, var_dtypes = {}, {}
+
     for (name, shape) in var_list:
         if name != global_step_name:
             var_values[name] = np.zeros(shape)
-    
+
     for checkpoint in checkpoints:
-        utils.print_out(" %s" % checkpoint)
+        utils.print_out("    %s" % checkpoint)
         reader = tf.contrib.framework.load_checkpoint(checkpoint)
         for name in var_values:
             tensor = reader.get_tensor(name)
             var_dtypes[name] = tensor.dtype
             var_values[name] += tensor
-    
+
     for name in var_values:
         var_values[name] /= len(checkpoints)
-    
+
     with tf.Graph().as_default():
-        tf_vars = [tf.get_variable(v, shape=var_values[v].shape, dtype=var_dtypes[v]) for v in var_values]
+        tf_vars = [tf.get_variable(v, shape=var_values[v].shape, dtype=var_dtypes[name]) for v in var_values]
+
         placeholders = [tf.placeholder(v.dtype, shape=v.shape) for v in tf_vars]
         assign_ops = [tf.assign(v, p) for (v, p) in zip(tf_vars, placeholders)]
         global_step_var = tf.Variable(global_step, name=global_step_name, trainable=False)
@@ -319,14 +326,16 @@ def avg_checkpoints(model_dir, num_last_checkpoints, global_step, global_step_na
             sess.run(tf.initialize_all_variables())
             for p, assign_op, (name, value) in zip(placeholders, assign_ops, six.iteritems(var_values)):
                 sess.run(assign_op, {p: value})
+
             saver.save(sess, os.path.join(avg_model_dir, "translate.ckpt"))
+
     return avg_model_dir
 
 def load_model(model, ckpt, session, name):
     start_time = time.time()
     model.saver.restore(session, ckpt)
     session.run(tf.tables_initializer())
-    utils.print_out("loaded %s model parameters from %s, time %.2fs" % (name, ckpt, time.time() - start_time))
+    utils.print_out("  loaded %s model parameters from %s, time %.2fs" % (name, ckpt, time.time() - start_time))
     return model
 
 
@@ -338,8 +347,8 @@ def create_or_load_model(model, model_dir, session, name):
         start_time = time.time()
         session.run(tf.global_variables_initializer())
         session.run(tf.tables_initializer())
-        utils.print_out(" created %s model with fresh parameters, time %.2fs" % (name, time.time() - start_time))
-    
+        utils.print_out("  created %s model with fresh parameters, time %.2fs" % (name, time.time() - start_time))
+
     global_step = model.global_step.eval(session=session)
     return model, global_step
 
@@ -356,7 +365,7 @@ def compute_perplexity(model, sess, name):
             total_predict_count += predict_count
         except tf.errors.OutOfRangeError:
             break
-    
+
     perplexity = utils.safe_exp(total_loss / total_predict_count)
-    utils.print_time(" eval %s: perplexity %.2f" % (name, perplexity), start_time)
+    utils.print_time("  eval %s: perplexity %.2f" % (name, perplexity), start_time)
     return perplexity
