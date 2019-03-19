@@ -14,4 +14,4 @@ Model is trained on small scale English-Vietnamese parallel corpus of TED talks 
 
 ## Dataset
 - Run `sh ./download_dataset.sh` to download dataset in `data/` folder.
-
+- Run `python3 nmt.py` to load dataset and train the model.
